@@ -61,9 +61,11 @@
       - bash-completion
       - conntrack-tools
       - ipset
+      - unzip
+      - lsof
+      - lrzsz
       - ipvsadm
       - libseccomp
-      - lvm2
       - nfs-utils
       - psmisc
       - rsync
@@ -71,6 +73,9 @@
       - ebtables
       - bridge-utils
       - rsyslog
+      - net-tools
+      - lsof
+      - sysstat
       - "{{ 'iproute' if (ansible_distribution == 'CentOS' and ansible_distribution_major_version == '7') else 'iproute-tc' }}"
     state: present
   when:

@@ -86,19 +86,21 @@
       set_fact:
         disk_mount_configs: "{{ disk_mount_configs | default([]) + [item] }}"
       loop:
-        - device: "/dev/{{ global.partition.rke2_data_dir_disk | default('') }}"
-          mount: "{{ global.rke2_data_dir }}"
-          vg: vg_rke2
-          lv: lv_rke2
-        - device: "/dev/{{ global.partition.kubelet_dir_disk | default('') }}"
-          mount: "{{ global.kubelet_dir }}"
-          vg: vg_kubelet
-          lv: lv_kubelet
         - device: "/dev/{{ global.partition.etcd_dir_disk | default('') }}"
-          mount: "{{ global.rke2_data_dir }}/server/db/etcd"
+          mount: "{{ global.etcd_data_dir }}"
           vg: vg_etcd
           lv: lv_etcd
           server_only: true                     ## etcd 仅 rke2-server (master) 节点挂载
+        - device: "/dev/{{ global.partition.containerd_data_dir_disk | default('none') }}"
+          mount: "{{ global.containerd_data_dir }}"
+          vg: vg_containerd
+          lv: lv_containerd
+          server_only: false
+        - device: "/dev/{{ global.partition.kubelet_dir_disk | default('none') }}"
+          mount: "{{ global.kubelet_dir }}"
+          vg: vg_kubelet
+          lv: lv_kubelet
+
       when:
         - item.device not in ['/dev/']
         - item.device != '/dev/none'

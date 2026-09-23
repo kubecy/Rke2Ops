@@ -21,19 +21,20 @@ global:
     uid: 2456
     password: kubeadmin123@!
   token: "RtMjcuJSVrbVlTBwQwisumREZWtMgH6RiKOXSsMKwAJsvGRaxaMIPOE+U6GKySQj"
+  profile: ""                                                  ## 基准测试验证系统配置: cis 根据实际情况配置
   pkg_rke2: "packages_rke2"
-  software_dir: /app/rke2                      ## RKE2 二进制包目录
-  rke2_worker_dir: /etc/rancher/rke2           ## RKE2工作目录 
-  rke2_data_dir: /var/lib/rancher/rke2         ## RKE2数据目录: IO 极敏感的场景下把 /var/lib/rancher/rke2/server/db（etcd）单独挂一块 NVMe，/var/lib/rancher/rke2/agent/containerd（镜像）挂大容量盘。
-  kubelet_dir: /var/lib/kubelet                ## 用于管理 kubelet 文件的根目录（Pod 卷、emptyDir、插件 socket等）  
-  profile: ""                                  ## 基准测试验证系统配置: cis 根据实际情况配置
-
-  partition:                                   ## rke2-server、rke2-agent主机磁盘分区
-    enabled: false                             ## 分区开关: true Or false
-    rke2_data_dir_disk: "sdb"                  ## rke2_data_dir 挂载盘 (nvme0n2 或 sdb, 按用户环境定义)
-    kubelet_dir_disk: "sdc"                    ## kubelet_dir 挂载盘 (nvme0n3 或 sdc, 按用户环境定义)
-    etcd_dir_disk: "none"                      ## 如果none，则etcd目录不单独挂载。
-    format_type: "xfs"                         ## 分区文件系统类型 (xfs/ext4)
+  software_dir: /app/rke2                                      ## RKE2 二进制包目录
+  rke2_worker_dir: /etc/rancher/rke2                           ## RKE2工作目录 
+  rke2_data_dir: /var/lib/rancher/rke2                         ## 官方推荐不要改变, RKE2数据目录: IO 极敏感的场景下把 /var/lib/rancher/rke2/server/db（etcd）单独挂一块高性能磁盘
+  etcd_data_dir: /var/lib/rancher/rke2/server/db/etcd          ## 存储Kubernetes集群状态（Pods, Services, Secrets等）
+  containerd_data_dir: /var/lib/rancher/rke2/agent/containerd  ## 存储容器镜像
+  kubelet_dir: /var/lib/kubelet                                ## 用于管理 kubelet 文件的根目录（Pod 卷、emptyDir、插件 socket等）  
+  partition:                                                   ## rke2-server、rke2-agent主机磁盘分区
+    enabled: true                                              ## 分区开关: true Or false
+    etcd_dir_disk: "sdb"                                       ## 如果none，则etcd目录不单独挂载。
+    containerd_data_dir_disk: "sdc"                            ## rke2_data_dir 挂载盘 (nvme0n2 或 sdb, 按用户环境定义)
+    kubelet_dir_disk: "sdd"                                    ## kubelet_dir 挂载盘 (nvme0n3 或 sdc, 按用户环境定义)
+    format_type: "xfs"                                         ## 分区文件系统类型 (xfs/ext4)
 
   ha_ip: "192.168.1.110"
 
@@ -58,11 +59,7 @@ rke2_server:
     etcd_snapshot_retention: 12                     ## 要保留的快照数量
     etcd_snapshot_compress: true                    ## 压缩 etcd 快照
 
-
-  disable_kube_proxy: true                ## 禁用 kube-proxy, 默认是：false, 如果开启, 修改为：true 即可
-  kubeproxyreplacement: true              ## 完全替代 kube‑proxy
   cni: "cilium"                           ## 部署的 CNI 插件, 可选值: none, calico, canal, cilium, multus 作为第一个值以启用 multus 元插件
-  ingress_controller: "none"              ## 部署的 Ingress Controller, 默认：traefik, 另外参数: none, ingress-nginx
   cluster_cidr: "10.244.0.0/16"           ## Pod IP 的 IPv4/IPv6 网络 CIDR
   service_cidr: "10.96.0.0/16"            ## 服务 IP 的 IPv4/IPv6 网络 CIDR 
   cluster_dns: "10.96.0.10"               ## CoreDNS 服务的 IPv4 集群 IP 地址, 在服务 CIDR 范围内
@@ -79,9 +76,60 @@ rke2_server:
   node_taint:                  ## MASTER 注册带有污点 
     - "node-role.kubernetes.io/control-plane=true:NoSchedule"
 
-  disable_cloud_controller: true  ## 禁用 rke2 默认云控制器管理器
+  disable_cloud_controller: true            ## 禁用 rke2 默认云控制器管理器
 
-  disable:                        ## 禁止部署已打包的组件, 有效项: rke2-coredns, rke2-ingress-nginx, rke2-metrics-server
+  ingress_controller: "none"                ## 部署的 Ingress Controller, 默认：traefik, 另外参数: none, ingress-nginx
+
+  cilium:                                   ## HelmChartConfig 配置 Cilium 清单
+    disable_kube_proxy: true                ## 是否禁用 kube-proxy, 默认是：false; 如果需要禁用则修改为：true
+    kubeproxyreplacement: true              ## 完全替代 kube‑proxy, 使用KPR模式
+    
+#    ipam:                                   ## 配置IP地址管理模式
+#      mode: "kubernetes"                    ## cluster-pool: cilium‑operator管理；单一大 IP 池，网段存于CiliumNode; kubernetes: 网段写入原生Node.spec.podCIDR；cilium 仅在已分配网段内分发 IP
+#      ciliumNodeUpdateRate: "15s"           ## 更新 CiliumNode 自定义资源的最大刷新速率
+#      operator:
+#        clusterPoolIPv4PodCIDRList: ["10.118.0.0/16"]  ## IPv4 Pod总地址池：集群所有Pod IPv4网段资源池
+#        clusterPoolIPv4MaskSize: 24                    ## 单节点IPv4子网掩码：每节点分配/24网段，单节点可用254个Pod IP，通用规格
+#        clusterPoolIPv6PodCIDRList: ["fd00::/104"]     ## IPv6 Pod总地址池
+#        clusterPoolIPv6MaskSize: 120                   ## 单节点IPv6子网掩码：每节点分配/120网段，单节点可用254个IPv6 Pod IP，与IPv4容量对齐
+#
+#    ingressController:                      ## ingressController 参数配置
+#      enabled: false                        ## 开启 cilium ingress controller, 前提条件: 必须 kubeProxyReplacement=true 和 l7Proxy=true (默认启用,L7 代理)
+#      loadbalancerMode: "dedicated"         ## 支持参数: shared, dedicated
+#      hostNetwork:
+#        enabled: true                       ## 支持参数: true, false; 启用 Cilium 入口控制器主机网络模式, 在负载均衡器服务不可用的情况下非常有用，例如拥有集群外部负载均衡器的环境中(Cilium 1.16+起支持)
+#        sharedListenerPort: 8080            ## HTTP, HTTPS 共用
+#        httpPort: 0                         ## cilium 1.20+ 开始支持, 可单独设置 HTTP 监听端口, 如果未设置或为0，则使用sharedListenerPort。
+#        httpsPort: 0                        ## 同上
+#        tlsPassthroughPort: 0               ## 同上
+#   
+#    gatewayAPI:                            ## 启用 Cilium 对网关 API 的支持
+#      enabled: true
+#      hostNetwork:                         ## 配置Envoy侦听器是否应在主机网络上公开
+#        enabled: false
+#    loadBalancer:                           ## 配置服务负载平衡
+#      algorithm: "random"                   ## random or maglev
+#      mode: "dsr"                           ## 后端负载均衡的操作模式。e.g. snat, dsr, hybrid
+#
+#    socketLB:                               ## 配置 socket LB
+#      enabled: true
+#      hostNamespaceOnly: false
+#      terminatePodConnections: true
+#      tracing: true
+#
+#    ipv4:
+#      enabled: true                         ## 启用 IPv4 支持, 默认开启
+#    ipv6:
+#      enabled: true                         ## 启用 IPv6 支持, 默认开启
+#
+#    gatewayAPI:
+#      enabled: true                         ## Enable support for Gateway API in cilium
+#
+#    bpf:
+#      masquerade: true
+#      hostLegacyRouting: false
+
+  disable:                                  ## 禁止部署已打包的组件, 有效项: rke2-coredns, rke2-ingress-nginx, rke2-metrics-server
     - rke2-ingress-nginx
     - rke2-metrics-server 
 
@@ -116,6 +164,7 @@ rke2_server:
     - max-requests-inflight=600
     - event-ttl=12h
   etcd_arg:
+    - data-dir={{ global.etcd_data_dir }}
     - auto-compaction-retention=8h
     - quota-backend-bytes=8589934592
     - heartbeat-interval=200

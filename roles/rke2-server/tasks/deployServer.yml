@@ -44,7 +44,7 @@
     dest: "{{ global.rke2_data_dir }}/server/manifests/93-rke2-cilium-config.yaml"
   when:
     - rke2_server.cilium.disable_kube_proxy | default(false) | bool 
-    - rke2_server.cilium.kubeproxyreplacement | default(false) | bool
+    - rke2_server.cilium.kubeProxyReplacement | default(false) | bool
 
 - name: 部署 rke2‑coredns 配置 HelmChartConfig 清单
   template:

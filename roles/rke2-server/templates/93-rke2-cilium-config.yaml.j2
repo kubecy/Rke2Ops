@@ -6,6 +6,24 @@ metadata:
   namespace: kube-system
 spec:
   valuesContent: |-
-    kubeProxyReplacement: {{ rke2_server.cilium.kubeproxyreplacement }}
+    routingMode: {{ rke2_server.cilium.routingMode }}
+{% if rke2_server.cilium.routingMode == "native" %}
+    ipv4NativeRoutingCIDR: {{ rke2_server.cilium.ipv4NativeRoutingCIDR }}
+{% endif %}
+{% if rke2_server.cilium.routingMode == "tunnel" %}
+    tunnelProtocol: {{ rke2_server.cilium.tunnelProtocol }}
+    MTU: {{ rke2_server.cilium.MTU }}
+{% endif %}
+    kubeProxyReplacement: {{ rke2_server.cilium.kubeProxyReplacement }}
     k8sServiceHost: {{ rke2_server.tls_san[0] }}
     k8sServicePort: 6443
+    l7Proxy: {{ rke2_server.cilium.l7Proxy }}
+    #gatewayAPI:
+    #  enabled: {{ rke2_server.cilium.gatewayAPI.enabled }}
+    #  externalTrafficPolicy: {{ rke2_server.cilium.gatewayAPI.externalTrafficPolicy }}
+    #  hostNetwork:
+    #    enabled: {{ rke2_server.cilium.gatewayAPI.hostNetwork.enabled }}
+    #enableIPv4Masquerade: {{ rke2_server.cilium.enableIPv4Masquerade }}
+    #enableIPv6Masquerade: {{ rke2_server.cilium.enableIPv6Masquerade }}
+    #bpf:
+    #  masquerade: {{ rke2_server.cilium.bpf.masquerade }}

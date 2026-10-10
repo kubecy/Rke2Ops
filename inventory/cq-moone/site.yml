@@ -81,53 +81,48 @@ rke2_server:
   ingress_controller: "none"                ## 部署的 Ingress Controller, 默认：traefik, 另外参数: none, ingress-nginx
 
   cilium:                                   ## HelmChartConfig 配置 Cilium 清单
+    routingMode: "tunnel"                   ## native Or tunnel 
+    ipv4NativeRoutingCIDR: "{{ rke2_server.cluster_cidr }}"
+    tunnelProtocol: "vxlan"                 ## vxlan Or geneve
+    MTU: 1450
     disable_kube_proxy: true                ## 是否禁用 kube-proxy, 默认是：false; 如果需要禁用则修改为：true
-    kubeproxyreplacement: true              ## 完全替代 kube‑proxy, 使用KPR模式
+    kubeProxyReplacement: true              ## 完全替代 kube‑proxy, 使用KPR模式
     
-#    ipam:                                   ## 配置IP地址管理模式
-#      mode: "kubernetes"                    ## cluster-pool: cilium‑operator管理；单一大 IP 池，网段存于CiliumNode; kubernetes: 网段写入原生Node.spec.podCIDR；cilium 仅在已分配网段内分发 IP
-#      ciliumNodeUpdateRate: "15s"           ## 更新 CiliumNode 自定义资源的最大刷新速率
-#      operator:
-#        clusterPoolIPv4PodCIDRList: ["10.118.0.0/16"]  ## IPv4 Pod总地址池：集群所有Pod IPv4网段资源池
-#        clusterPoolIPv4MaskSize: 24                    ## 单节点IPv4子网掩码：每节点分配/24网段，单节点可用254个Pod IP，通用规格
-#        clusterPoolIPv6PodCIDRList: ["fd00::/104"]     ## IPv6 Pod总地址池
-#        clusterPoolIPv6MaskSize: 120                   ## 单节点IPv6子网掩码：每节点分配/120网段，单节点可用254个IPv6 Pod IP，与IPv4容量对齐
-#
-#    ingressController:                      ## ingressController 参数配置
-#      enabled: false                        ## 开启 cilium ingress controller, 前提条件: 必须 kubeProxyReplacement=true 和 l7Proxy=true (默认启用,L7 代理)
-#      loadbalancerMode: "dedicated"         ## 支持参数: shared, dedicated
-#      hostNetwork:
-#        enabled: true                       ## 支持参数: true, false; 启用 Cilium 入口控制器主机网络模式, 在负载均衡器服务不可用的情况下非常有用，例如拥有集群外部负载均衡器的环境中(Cilium 1.16+起支持)
-#        sharedListenerPort: 8080            ## HTTP, HTTPS 共用
-#        httpPort: 0                         ## cilium 1.20+ 开始支持, 可单独设置 HTTP 监听端口, 如果未设置或为0，则使用sharedListenerPort。
-#        httpsPort: 0                        ## 同上
-#        tlsPassthroughPort: 0               ## 同上
-#   
-#    gatewayAPI:                            ## 启用 Cilium 对网关 API 的支持
-#      enabled: true
-#      hostNetwork:                         ## 配置Envoy侦听器是否应在主机网络上公开
-#        enabled: false
-#    loadBalancer:                           ## 配置服务负载平衡
-#      algorithm: "random"                   ## random or maglev
-#      mode: "dsr"                           ## 后端负载均衡的操作模式。e.g. snat, dsr, hybrid
-#
-#    socketLB:                               ## 配置 socket LB
-#      enabled: true
-#      hostNamespaceOnly: false
-#      terminatePodConnections: true
-#      tracing: true
-#
-#    ipv4:
-#      enabled: true                         ## 启用 IPv4 支持, 默认开启
-#    ipv6:
-#      enabled: true                         ## 启用 IPv6 支持, 默认开启
-#
-#    gatewayAPI:
-#      enabled: true                         ## Enable support for Gateway API in cilium
-#
-#    bpf:
-#      masquerade: true
-#      hostLegacyRouting: false
+    ipam:                                   ## 配置IP地址管理模式
+      mode: "kubernetes"                    ## cluster-pool: cilium‑operator管理；单一大 IP 池，网段存于CiliumNode; kubernetes: 网段写入原生Node.spec.podCIDR；cilium 仅在已分配网段内分发 IP
+      ciliumNodeUpdateRate: "15s"           ## 更新 CiliumNode 自定义资源的最大刷新速率
+      operator:
+        clusterPoolIPv4PodCIDRList: ["10.118.0.0/16"]  ## IPv4 Pod总地址池：集群所有Pod IPv4网段资源池
+        clusterPoolIPv4MaskSize: 24                    ## 单节点IPv4子网掩码：每节点分配/24网段，单节点可用254个Pod IP，通用规格
+        clusterPoolIPv6PodCIDRList: ["fd00::/104"]     ## IPv6 Pod总地址池
+        clusterPoolIPv6MaskSize: 120                   ## 单节点IPv6子网掩码：每节点分配/120网段，单节点可用254个IPv6 Pod IP，与IPv4容量对齐
+    l7Proxy: true
+    gatewayAPI:                            ## 启用 Cilium 对网关 API 的支持, Cilium 必须使用 kubeProxyReplacement和l7Proxy
+      enabled: true  
+      externalTrafficPolicy: Cluster
+      hostNetwork:                         ## 配置Envoy侦听器是否应在主机网络上公开, Cilium 1.16+ 起支持
+        enabled: false
+
+    loadBalancer:                           ## 配置服务负载平衡
+      algorithm: "random"                   ## random or maglev
+      mode: "dsr"                           ## 后端负载均衡的操作模式。e.g. snat, dsr, hybrid
+
+    socketLB:                               ## 配置 socket LB
+      enabled: true
+      hostNamespaceOnly: false
+      terminatePodConnections: true
+      tracing: true
+
+    ipv4:
+      enabled: true                         ## 启用 IPv4 支持, 默认开启
+    ipv6:
+      enabled: true                         ## 启用 IPv6 支持, 默认开启
+
+    enableIPv4Masquerade: true
+    enableIPv6Masquerade: true
+    bpf:
+      masquerade: true
+      hostLegacyRouting: false
 
   disable:                                  ## 禁止部署已打包的组件, 有效项: rke2-coredns, rke2-ingress-nginx, rke2-metrics-server
     - rke2-ingress-nginx

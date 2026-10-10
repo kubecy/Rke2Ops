@@ -124,6 +124,11 @@ rke2_server:
       masquerade: true
       hostLegacyRouting: false
 
+    encryption:
+      enabled: true
+      type: ipsec                           ## ipsec, wireguard or ztunnel
+      nodeEncryption: false                 ## 节点间纯节点流量也加密
+      
   disable:                                  ## 禁止部署已打包的组件, 有效项: rke2-coredns, rke2-ingress-nginx, rke2-metrics-server
     - rke2-ingress-nginx
     - rke2-metrics-server 

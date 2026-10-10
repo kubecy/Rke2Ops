@@ -26,3 +26,18 @@
   loop: "{{ groups['rke2_agent'] }}"
   delegate_to: "{{ groups['rke2_server'][0] }}"
   run_once: true
+
+- name: 创建 cilium-ipsec-keys Secret
+  vars:
+    ansible_become_pass: "{{ servers[groups['rke2_server'][0]].sudopass | b64decode }}"
+  shell: |
+    export KUBECONFIG=/home/{{ global.k8s_user.user }}/.kube/config
+    export PATH=$PATH:{{ global.rke2_data_dir }}/bin
+    kubectl create -n kube-system secret generic cilium-ipsec-keys \
+      --from-literal=keys="3+ rfc4106(gcm(aes)) $(dd if=/dev/urandom count=20 bs=1 2> /dev/null | xxd -p -c 64) 128"
+  delegate_to: "{{ groups['rke2_server'][0] }}"
+  run_once: true
+  register: ipsec_secret_create
+  when:
+    - rke2_server.cilium.encryption.enabled | default(false) | bool
+    - rke2_server.cilium.encryption.type | default('') == 'ipsec'

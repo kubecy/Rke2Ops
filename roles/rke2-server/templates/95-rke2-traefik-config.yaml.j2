@@ -1,2 +1,58 @@
 ---
-
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: rke2-traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    deployment:
+      enabled: {{ rke2_server.traefik.deployment.enabled | string | lower }} 
+      kind: {{ rke2_server.traefik.deployment.kind }}
+      replicas: {{ rke2_server.traefik.deployment.replicas }}
+      podLabels:
+{% for key, value in rke2_server.traefik.deployment.podLabels.items() %}
+        {{ key }}: {{ value }}
+{% endfor %}
+    podDisruptionBudget:
+      enabled: {{ rke2_server.traefik.podDisruptionBudget.enabled | string | lower }}
+      minAvailable: {{ rke2_server.traefik.podDisruptionBudget.minAvailable }}
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+{% for key, value in rke2_server.traefik.deployment.podLabels.items() %}
+                {{ key }}: {{ value }}
+{% endfor %}
+            topologyKey: kubernetes.io/hostname
+    providers:
+      kubernetesCRD:
+        enabled: {{ rke2_server.traefik.providers.kubernetesCRD.enabled | string | lower }}
+      kubernetesIngress:
+        enabled: {{ rke2_server.traefik.providers.kubernetesIngress.enabled | string | lower }}
+      kubernetesGateway:
+        enabled: {{ rke2_server.traefik.providers.kubernetesGateway.enabled | string | lower }}
+      file:
+        enabled: {{ rke2_server.traefik.providers.file.enabled | string | lower }}
+    ports:
+      web:
+        port: {{ rke2_server.traefik.ports.web.port }}
+        hostPort: {{ rke2_server.traefik.ports.web.hostPort }}
+      websecure:
+        port: {{ rke2_server.traefik.ports.websecure.port }}
+        hostPort: {{ rke2_server.traefik.ports.websecure.hostPort }}
+    gateway:
+      listeners:
+        web:
+          port: {{ rke2_server.traefik.gateway.listeners.web.port }}
+          protocol: {{ rke2_server.traefik.gateway.listeners.web.protocol }}
+    logs:
+      general:
+        format: {{ rke2_server.traefik.logs.general.format }}
+        level: {{ rke2_server.traefik.logs.general.level }}
+        noColor: {{ rke2_server.traefik.logs.general.noColor | string | lower }}
+      access:
+        enabled: {{ rke2_server.traefik.logs.access.enabled | string | lower }}
+        format: {{ rke2_server.traefik.logs.access.format}}
+    

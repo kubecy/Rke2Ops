@@ -10,9 +10,9 @@ global:
   ansible_dir: "{{ playbook_dir }}/.."
   docker_repo:
     host: "harbor.kubecy.com"  ## 私有镜像仓库
-    host_ip: "192.168.1.150"   ## 镜像仓库 IP (内网域名需写入 /etc/hosts 时配置, 留空跳过)
+    host_ip: "192.168.1.145"   ## 镜像仓库 IP (内网域名需写入 /etc/hosts 时配置, 留空跳过)
     user: "admin"
-    password: "Harbor123@!"
+    password: "harbor123@!"
     disable_default_registry_endpoint: true
   k8s_user:                    ## 管理 K8S 集群专用用户                            
     group: kubeadmin
@@ -30,13 +30,13 @@ global:
   containerd_data_dir: /var/lib/rancher/rke2/agent/containerd  ## 存储容器镜像
   kubelet_dir: /var/lib/kubelet                                ## 用于管理 kubelet 文件的根目录（Pod 卷、emptyDir、插件 socket等）  
   partition:                                                   ## rke2-server、rke2-agent主机磁盘分区
-    enabled: true                                              ## 分区开关: true Or false
+    enabled: false                                              ## 分区开关: true Or false
     etcd_dir_disk: "sdb"                                       ## 如果none，则etcd目录不单独挂载。
     containerd_data_dir_disk: "sdc"                            ## rke2_data_dir 挂载盘 (nvme0n2 或 sdb, 按用户环境定义)
     kubelet_dir_disk: "sdd"                                    ## kubelet_dir 挂载盘 (nvme0n3 或 sdc, 按用户环境定义)
     format_type: "xfs"                                         ## 分区文件系统类型 (xfs/ext4)
 
-  ha_ip: "192.168.1.110"
+  ha_ip: "192.168.1.200"
 
 ##============================================================================= 
 ##                                K8S MASTER                                 ##
@@ -60,8 +60,8 @@ rke2_server:
     etcd_snapshot_compress: true                    ## 压缩 etcd 快照
 
   cni: "cilium"                           ## 部署的 CNI 插件, 可选值: none, calico, canal, cilium, multus 作为第一个值以启用 multus 元插件
-  cluster_cidr: "10.244.0.0/16"           ## Pod IP 的 IPv4/IPv6 网络 CIDR
-  service_cidr: "10.96.0.0/16"            ## 服务 IP 的 IPv4/IPv6 网络 CIDR 
+  cluster_cidr: "10.244.0.0/16"  #,2001:cafe:42::/56"           ## Pod IP 的 IPv4/IPv6 网络 CIDR
+  service_cidr: "10.96.0.0/16" #,2001:cafe:43::/112"            ## 服务 IP 的 IPv4/IPv6 网络 CIDR 
   cluster_dns: "10.96.0.10"               ## CoreDNS 服务的 IPv4 集群 IP 地址, 在服务 CIDR 范围内
   service_node_port_range: "30000-65000"  ## NodePort 可见性的服务预留端口范围
   cluster_domain: "cluster.local"         ## Kubernetes 集群的 DNS 域后缀配置项
@@ -77,35 +77,124 @@ rke2_server:
     - "node-role.kubernetes.io/control-plane=true:NoSchedule"
 
   disable_cloud_controller: true            ## 禁用 rke2 默认云控制器管理器
+  disable_kube_proxy: true                  ## 是否禁用 kube-proxy, 默认是：false; 如果需要禁用则修改为：true
 
-  ingress_controller: "none"                ## 部署的 Ingress Controller, 默认：traefik, 另外参数: none, ingress-nginx
+  ingress_controller: "traefik"             ## 部署 Ingress Controller, 参数: none, ingress-nginx、traefik; 从 RKE2 v1.36 开始, Traefik 默认部署
+
+  traefik:                                  ## HelmChartConfig 配置 Traefik 清单
+    deployment:
+      enabled: true
+      kind: Deployment                      ## Deployment or DaemonSet, 采用Deployment副本至少 >=2, 并且需要配置好反亲和性, 强制Pod分散到不同节点
+      replicas: 2
+      podLabels:
+        role: infra
+        component: gateway-api  
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+            topologyKey: kubernetes.io/hostname
+    webPort: 9880
+    websecurePort: 9443
+    providers:
+      kubernetesCRD:
+        enabled: true
+      kubernetesIngress:
+        enabled: true
+      kubernetesGateway:
+        enabled: true
+      file:
+        enabled: false
+    ports:
+      web:
+        port: "{{ rke2_server.traefik.webPort }}"
+        hostPort: "{{ rke2_server.traefik.webPort }}"
+      websecure:
+        port: "{{ rke2_server.traefik.websecurePort }}"
+        hostPort: "{{ rke2_server.traefik.websecurePort }}"
+    gateway:
+      listeners:
+        web:
+          port: "{{ rke2_server.traefik.webPort }}"
+          protocol: HTTP
+        websecure:
+          port: "{{ rke2_server.traefik.websecurePort }}"
+          protocol: HTTPS
+    logs:
+      general:
+        format: "common"                    ## 设置日志格式, 默认: "common", 其他: json
+        level: "INFO"
+        noColor: false                      ## 彩色输出, 使用common格式时，会禁用彩色输出
+      access:                               ## 开启访问日志
+        enabled: true                  
+        format: "json"                      ## 设置日志格式, 默认: "common", 其他: json
+
+
 
   cilium:                                   ## HelmChartConfig 配置 Cilium 清单
+    cluster:
+      name: "mobilecloud-k8s-01"            ## 群集的名称。仅需要群集网格和与SPIRE的相互身份验证
+      id: 1                                 ## 集群的唯一ID。在所有连接的设备中必须是唯一的
     routingMode: "tunnel"                   ## native Or tunnel 
     ipv4NativeRoutingCIDR: "{{ rke2_server.cluster_cidr }}"
     tunnelProtocol: "vxlan"                 ## vxlan Or geneve
+    tunnelPort: 8472                        ## 端口8472用于VXLAN，端口6081用于Geneve 
     MTU: 1450
-    disable_kube_proxy: true                ## 是否禁用 kube-proxy, 默认是：false; 如果需要禁用则修改为：true
     kubeProxyReplacement: true              ## 完全替代 kube‑proxy, 使用KPR模式
-    
+    resources:
+      limits:
+        cpu: 3000m
+        memory: 2Gi
+      requests:
+        cpu: 100m
+        memory: 512Mi
+    operator:
+      replicas: 3
+      resources:
+        limits:
+          cpu: 2000m
+          memory: 2Gi
+        requests:
+          cpu: 100m
+          memory: 128Mi    
+    ipv4:
+      enabled: true                         ## 启用 IPv4 支持, 默认开启
+    ipv6:
+      enabled: false                        ## 启用 IPv6 支持, 默认开启
     ipam:                                   ## 配置IP地址管理模式
-      mode: "kubernetes"                    ## cluster-pool: cilium‑operator管理；单一大 IP 池，网段存于CiliumNode; kubernetes: 网段写入原生Node.spec.podCIDR；cilium 仅在已分配网段内分发 IP
+      mode: "cluster-pool"                  ## cluster-pool: cilium‑operator管理；单一大 IP 池，网段存于CiliumNode; kubernetes: 网段写入原生Node.spec.podCIDR；cilium 仅在已分配网段内分发 IP
       ciliumNodeUpdateRate: "15s"           ## 更新 CiliumNode 自定义资源的最大刷新速率
       operator:
-        clusterPoolIPv4PodCIDRList: ["10.118.0.0/16"]  ## IPv4 Pod总地址池：集群所有Pod IPv4网段资源池
+        clusterPoolIPv4PodCIDRList: ["10.224.0.0/16","10.225.0.0/16","10.226.0.0/16","10.227.0.0/16"]  ## IPv4 Pod总地址池：集群所有Pod IPv4网段资源池
         clusterPoolIPv4MaskSize: 24                    ## 单节点IPv4子网掩码：每节点分配/24网段，单节点可用254个Pod IP，通用规格
-        clusterPoolIPv6PodCIDRList: ["fd00::/104"]     ## IPv6 Pod总地址池
+        clusterPoolIPv6PodCIDRList: ["2001:cafe:42::/56"]     ## IPv6 Pod总地址池
         clusterPoolIPv6MaskSize: 120                   ## 单节点IPv6子网掩码：每节点分配/120网段，单节点可用254个IPv6 Pod IP，与IPv4容量对齐
+
     l7Proxy: true
-    gatewayAPI:                            ## 启用 Cilium 对网关 API 的支持, Cilium 必须使用 kubeProxyReplacement和l7Proxy
-      enabled: true  
+    dnsProxy:
+      enableTransparentMode: true           ## 启用透明模式, DNS 代理发出的查询流量会携带正确的 Pod 源 IP
+    gateway_api_version: v1.4.1             ## Kubernetes Gateway API 版本;  Gateway API 版本一定要与cilium版本兼容, 否则cilium-operator和cilium-agent报错
+    gatewayAPI:                             ## 启用 Cilium 对网关 API 的支持, Cilium 必须使用 kubeProxyReplacement和l7Proxy
+      enabled: false  
       externalTrafficPolicy: Cluster
-      hostNetwork:                         ## 配置Envoy侦听器是否应在主机网络上公开, Cilium 1.16+ 起支持
-        enabled: false
+      gatewayClass:
+        create: 'auto'                      ## 根据集群中是否存在gateway.networking.k8s.io/v1/GatewayClass来决定, 默认: 'auto', 其他可能的值是'true'和'false'
+      hostNetwork:                          ## 配置Envoy侦听器是否应在主机网络上公开, Cilium 1.16+ 起支持
+        enabled: true
+        nodes:
+          matchLabels:                      ## Cilium Gateway API Envoy 监听器暴露在特定的节点子集上, 仅在与主机网络模式结合使用时有效
+            role: infra                    
+            component: gateway-api
+    envoy:
+      enabled: false                        ## 启用Envoy代理, 独立守护进程模式（DaemonSet）
 
     loadBalancer:                           ## 配置服务负载平衡
-      algorithm: "random"                   ## random or maglev
-      mode: "dsr"                           ## 后端负载均衡的操作模式。e.g. snat, dsr, hybrid
+      algorithm: "maglev"                   ## random or maglev
+      mode: "dsr"                           ## 后端负载均衡的操作模式 e.g. snat, dsr, hybrid
 
     socketLB:                               ## 配置 socket LB
       enabled: true
@@ -113,22 +202,24 @@ rke2_server:
       terminatePodConnections: true
       tracing: true
 
-    ipv4:
-      enabled: true                         ## 启用 IPv4 支持, 默认开启
-    ipv6:
-      enabled: true                         ## 启用 IPv6 支持, 默认开启
-
-    enableIPv4Masquerade: true
-    enableIPv6Masquerade: true
+    enableIPv4Masquerade: true              ## 允许伪装从端点离开节点的IPv4流量
+    enableIPv6Masquerade: true              ## 允许伪装从端点离开节点的IPv6流量
     bpf:
       masquerade: true
       hostLegacyRouting: false
+      preallocateMaps: true                 ## 预分配 BPF map，降低首次创建延迟
+      distributedLRU:
+        enabled: true                       ## 分布式 per-CPU LRU，提升大集群 map 性能
+      ctTcpMax: 1048576                     ## 加大 TCP conntrack 表, @default -- `524288`
+      ctAnyMax: 524288                      ## 加大非 TCP conntrack 表, @default -- `262144`
+      natMax: 1048576                       ## 加大 NAT 表，适配大量 Service/Endpoint
+      lbMapMax: 131072                      ## Service 条目上限
 
     encryption:
-      enabled: true
+      enabled: false
       type: ipsec                           ## ipsec, wireguard or ztunnel
       nodeEncryption: false                 ## 节点间纯节点流量也加密
-      
+
   disable:                                  ## 禁止部署已打包的组件, 有效项: rke2-coredns, rke2-ingress-nginx, rke2-metrics-server
     - rke2-ingress-nginx
     - rke2-metrics-server 

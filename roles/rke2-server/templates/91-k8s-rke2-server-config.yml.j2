@@ -3,7 +3,7 @@ server: https://{{ rke2_server.tls_san[0] }}:9345
 {% endif %}
 token: {{ global.token }}
 node-name: {{ inventory_hostname }}
-node-ip: {{ ansible_host }} 
+node-ip: {{ ansible_host }}
 
 write-kubeconfig: {{ rke2_server.write_kubeconfig }}
 write-kubeconfig-mode: {{ rke2_server.write_kubeconfig_mode }}
@@ -13,7 +13,7 @@ tls-san:
   - {{ ip }}
 {% endfor %}
 
-disable-default-registry-endpoint: {{ global.docker_repo.disable_default_registry_endpoint }}
+disable-default-registry-endpoint: {{ global.docker_repo.disable_default_registry_endpoint | string | lower  }}
 system-default-registry: {{ global.docker_repo.host }}
 
 node-taint:
@@ -26,17 +26,17 @@ disable:
   - {{ disable }}
 {% endfor %}
 
-disable-cloud-controller: {{ rke2_server.disable_cloud_controller }}
-disable-kube-proxy: {{ rke2_server.cilium.disable_kube_proxy }}
+disable-cloud-controller: {{ rke2_server.disable_cloud_controller | string | lower }}
+disable-kube-proxy: {{ rke2_server.disable_kube_proxy | string | lower }}
 
 profile: "{{ global.profile }}"
 
 data-dir: {{ global.rke2_data_dir }}
-etcd-expose-metrics: {{ rke2_server.db.etcd_expose_metrics }}
-etcd-disable-snapshots: {{ rke2_server.db.etcd_disable_snapshots }}
+etcd-expose-metrics: {{ rke2_server.db.etcd_expose_metrics | string | lower }}
+etcd-disable-snapshots: {{ rke2_server.db.etcd_disable_snapshots | string | lower }}
 etcd-snapshot-schedule-cron: "{{ rke2_server.db.etcd_snapshot_schedule_cron }}"
 etcd-snapshot-retention: {{ rke2_server.db.etcd_snapshot_retention }}
-etcd-snapshot-compress: {{ rke2_server.db.etcd_snapshot_compress }}
+etcd-snapshot-compress: {{ rke2_server.db.etcd_snapshot_compress | string | lower }}
 
 cni: "{{ rke2_server.cni }}"
 ingress-controller: "{{ rke2_server.ingress_controller }}"
@@ -66,7 +66,7 @@ etcd-arg:
   - {{ etcd_arg }}
 {% endfor %}
 
-{% if not (rke2_server.cilium.disable_kube_proxy and rke2_server.cilium.kubeProxyReplacement) %}
+{% if not (rke2_server.disable_kube_proxy and rke2_server.cilium.kubeProxyReplacement) %}
 kube-proxy-arg:
 {% for kube_proxy_arg in rke2_agent.kube_proxy_arg %}
   - {{ kube_proxy_arg }}

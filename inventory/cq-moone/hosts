@@ -5,13 +5,15 @@
 ## 控制平面 (control-plane + etcd) 节点
 [rke2_server]
 ## 注意: 每个环境必须有且仅有一台主机标记 init_master=true（首台初始化节点）
-cq-moone-master1 ansible_host=192.168.1.61 init_master=true
+cq-moone-master1 ansible_host=192.168.1.61 init_master=true  #ansible_host_ipv6=fd15:4ba5:5a2b:1008:20c:29ff:fe3f:e1ff
 #cq-moone-master2 ansible_host=192.168.1.62
 #cq-moone-master3 ansible_host=192.168.1.63
 
 ## worker 节点
 [rke2_agent]
-cq-moone-worker1 ansible_host=192.168.1.71
-cq-moone-worker2 ansible_host=192.168.1.72
+cq-moone-worker1 ansible_host=192.168.1.71 #ansible_host_ipv6=fd15:4ba5:5a2b:1008:20c:29ff:fe8f:a2e2
+cq-moone-worker2 ansible_host=192.168.1.72 #ansible_host_ipv6=fd15:4ba5:5a2b:1008:20c:29ff:fe46:b23f
 #cq-moone-worker3 ansible_host=192.168.1.73
-
+[gateway_infra_nodes]
+cq-moone-worker1
+cq-moone-worker2

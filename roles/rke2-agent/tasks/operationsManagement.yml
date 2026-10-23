@@ -27,6 +27,20 @@
   delegate_to: "{{ groups['rke2_server'][0] }}"
   run_once: true
 
+- name: 检查 cilium-ipsec-keys Secret 是否已存在
+  vars:
+    ansible_become_pass: "{{ servers[groups['rke2_server'][0]].sudopass | b64decode }}"
+  command: >
+    kubectl get secret -n kube-system cilium-ipsec-keys
+  delegate_to: "{{ groups['rke2_server'][0] }}"
+  run_once: true
+  register: check_ipsec_secret
+  ignore_errors: true
+  changed_when: false
+  when:
+    - rke2_server.cilium.encryption.enabled | default(false) | bool
+    - rke2_server.cilium.encryption.type | default('') == 'ipsec'
+   
 - name: 创建 cilium-ipsec-keys Secret
   vars:
     ansible_become_pass: "{{ servers[groups['rke2_server'][0]].sudopass | b64decode }}"
@@ -41,3 +55,76 @@
   when:
     - rke2_server.cilium.encryption.enabled | default(false) | bool
     - rke2_server.cilium.encryption.type | default('') == 'ipsec'
+    - check_ipsec_secret is failed
+
+- name: 给Gateway API节点打上node标签 role=infra,component=gateway-api
+  shell: |
+    export KUBECONFIG=/home/{{ global.k8s_user.user }}/.kube/config
+    export PATH=$PATH:{{ global.rke2_data_dir }}/bin
+    kubectl label node {{ item }} role=infra component=gateway-api --overwrite
+  loop: "{{ groups['gateway_infra_nodes'] }}"
+  delegate_to: "{{ groups['rke2_server'][0] }}"
+  vars:
+    ansible_become_pass: "{{ servers[groups['rke2_server'][0]].sudopass | b64decode }}"
+  run_once: true
+  when:
+    - rke2_server.cilium.gatewayAPI.enabled | default(false) | bool
+    - rke2_server.cilium.gatewayAPI.hostNetwork.enabled | default(false) | bool
+
+- name: 创建 Gateway-API CRDs 远程目录
+  file:
+    path: /app/yaml/Gateway-API-CRDs/v1.4.1
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  delegate_to: "{{ groups['rke2_server'][0] }}"
+  run_once: true
+  vars:
+    ansible_become_pass: "{{ servers[groups['rke2_server'][0]].sudopass | b64decode }}"
+  when:
+    - rke2_server.cilium.gatewayAPI.enabled | default(false) | bool
+
+- name: 上传 Gateway-API CRDs 清单
+  copy:
+    src: gateway-api/{{ rke2_server.cilium.gateway_api_version }}/
+    dest: /app/yaml/Gateway-API-CRDs/{{ rke2_server.cilium.gateway_api_version }}/
+    owner: root
+    group: root
+    mode: '0644'
+    directory_mode: '0755'
+  become: true
+  delegate_to: "{{ groups['rke2_server'][0] }}"
+  run_once: true
+  vars:
+    ansible_become_pass: "{{ servers[groups['rke2_server'][0]].sudopass | b64decode }}"
+  when:
+    - rke2_server.cilium.gatewayAPI.enabled | default(false) | bool
+
+- name: 应用 Gateway-API CRDs 清单
+  shell: |
+    export KUBECONFIG=/home/{{ global.k8s_user.user }}/.kube/config
+    export PATH=$PATH:{{ global.rke2_data_dir }}/bin
+    kubectl apply -f /app/yaml/Gateway-API-CRDs/{{ rke2_server.cilium.gateway_api_version }}/
+  delegate_to: "{{ groups['rke2_server'][0] }}"
+  run_once: true
+  vars:
+    ansible_become_pass: "{{ servers[groups['rke2_server'][0]].sudopass | b64decode }}"
+  register: gateway_crd_apply
+  changed_when: "'created' in gateway_crd_apply.stdout or 'configured' in gateway_crd_apply.stdout"
+  when:
+    - rke2_server.cilium.gatewayAPI.enabled | default(false) | bool
+
+- name: 重启 cilium-operator、cilium DaemonSet 加载 Gateway API CRDs
+  shell: |
+    export KUBECONFIG=/home/{{ global.k8s_user.user }}/.kube/config
+    export PATH=$PATH:{{ global.rke2_data_dir }}/bin
+    kubectl -n kube-system rollout restart deployment/cilium-operator
+    kubectl -n kube-system rollout restart ds/cilium
+  delegate_to: "{{ groups['rke2_server'][0] }}"
+  run_once: true
+  vars:
+    ansible_become_pass: "{{ servers[groups['rke2_server'][0]].sudopass | b64decode }}"
+  when:
+    - rke2_server.cilium.gatewayAPI.enabled | default(false) | bool

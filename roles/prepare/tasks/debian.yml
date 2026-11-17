@@ -1,12 +1,11 @@
-####################################################################################
-## debian、ubuntu 系统配置                                                       ###
-####################################################################################
+##############################
+## debian  ubuntu 系统配置  ##
+##############################
 
 ---
 - name: apt 更新缓存刷新
   apt: update_cache=yes cache_valid_time=72000
   ignore_errors: true
-  when: global.install_source | default("online") != "offline"
 
 - name: 删除 ubuntu 默认安装
   package:
@@ -21,31 +20,53 @@
 - name: 安装 ubuntu、debian 基础软件
   package: 
     name:
-      - bash-completion
-      - conntrack      
-      - ipset          
-      - ipvsadm        
-      - jq             
-      - libseccomp2    
-      - lvm2           
-      - nfs-common     
-      - psmisc         
-      - rsync          
-      - socat          
+      - bash-completion     # bash命令补全工具，需要重新登录服务器生效
+      - conntrack           # network connection cleanup 用到
+      - ipset               # ipvs 模式需要
+      - ipvsadm             # ipvs 模式需要
+      - jq                  # 轻量JSON处理程序，安装docker查询镜像需要
+      - libseccomp2         # 安装containerd需要
+      - lvm2                # 安装Local PV LVM 存储插件需要
+      - psmisc              # 安装psmisc 才能使用命令killall，keepalive的监测脚本需要
+      - rsync               # 文件同步工具，分发证书等配置文件需要
+      - socat               # 用于port forwarding
+      - vim                 # 文本编辑器，运维修改配置文件
+      - inetutils-telnet    # telnet客户端，TCP端口连通探测，仅用于测试
+      - wget                # 文件下载工具
+      - curl                # HTTP/HTTPS请求调试、接口测试
+      - net-tools           # 传统网络工具，ifconfig/route等
+      - iproute2            # 现代Linux网络套件，ip/ss命令
+      - git                 # 代码拉取，helm/配置仓库克隆
+      - tar                 # 压缩解压工具，解压安装包
+      - ebtables            # 二层网桥过滤工具，ipvs+网桥CNI场景使用
+      - sysstat             # 系统性能采集，iostat、mpstat、sar
+      - procps              # 进程管理工具，ps、top
+      - htop                # 交互式进程监控，替代top
+      - ncdu                # 交互式磁盘占用分析，快速定位大文件
+      - dstat               # 综合资源监控，CPU/内存/IO/网络一站式查看
+      - tcpdump             # 抓包工具，排查Pod、Service网络问题
+      - iputils-ping        # ping连通性测试工具
+      - traceroute          # 路由追踪，排查跨节点网络路由
+      - bind9-dnsutils      # dns解析工具，dig、nslookup，排查CoreDNS
+      - bridge-utils        # 网桥管理工具，排查calico/flannel网桥
+      - nfs-common          # 挂载nfs 共享文件需要 (创建基于 nfs的PV 需要)
     state: present
-  when: global.install_source | default("online") != "offline"
 
-- import_tasks: offline.yml
-  when: global.install_source | default("online") != "offline"
+# 优化设置 journal 日志相关，避免日志重复搜集，浪费系统资源
+- name: 准备 journal 日志相关目录
+  file: 
+    name: "{{ item }}"
+    state: directory
+  with_items:
+  - "/etc/systemd/journald.conf.d"
+  - "/var/log/journal"
 
-#- name: 准备 journal 日志相关目录
-#  file: name={{ item }} state=directory
-#  with_items:
-#  - "/etc/systemd/journald.conf.d"
-#  - "/var/log/journal"
-#
-#- name: 优化设置 journal 日志
-#  template: src=95-k8s-journald.conf.j2 dest=/etc/systemd/journald.conf.d/95-k8s-journald.conf
-#
-#- name: 重启 journald 服务
-#  service: name=systemd-journald state=restarted
+- name: 优化设置 journal 日志
+  template: 
+    src: 92-k8s-journald.conf.j2 
+    dest: /etc/systemd/journald.conf.d/92-k8s-journald.conf
+
+- name: 重启 journald 服务
+  service: 
+    name: systemd-journald 
+    state: restarted

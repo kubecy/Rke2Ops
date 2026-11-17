@@ -43,16 +43,24 @@
   register: NF_CONNTRACK_IPV4
 
 - name: 启用 systemd 自动加载模块服务
-  service: name=systemd-modules-load enabled=yes
+  service: 
+    name: systemd-modules-load 
+    enabled: yes
 
 - name: 增加内核模块开机加载配置
-  template: src=10-k8s-rke2-modules.conf.j2 dest=/etc/modules-load.d/10-k8s-rke2-modules.conf
+  template: 
+    src: 94-k8s-rke2-modules.conf.j2 
+    dest: /etc/modules-load.d/94-k8s-rke2-modules.conf
 
 - name: 设置系统内核参数
-  template: src=95-k8s-rke2-sysctl.conf.j2 dest=/etc/sysctl.d/95-k8s-rke2-sysctl.conf
+  template: 
+    src: 95-k8s-rke2-sysctl.conf.j2 
+    dest: /etc/sysctl.d/95-k8s-rke2-sysctl.conf
 
 - name: 设置系统描述符 ulimits
-  template: src=30-k8s-rke2-ulimits.conf.j2 dest=/etc/security/limits.d/30-k8s-rke2-ulimits.conf
+  template: 
+    src: 93-k8s-rke2-ulimits.conf.j2 
+    dest: /etc/security/limits.d/93-k8s-rke2-ulimits.conf
 
 - name: 查看是否需要设置 fs.may_detach_mounts
   stat:
@@ -63,12 +71,38 @@
   register: fs_may_detach_mounts
   ignore_errors: true
 
+- name: 当需要时，设置 fs.may_detach_mounts 为 1
+  sysctl:
+    sysctl_file: "/etc/sysctl.d/95-k8s-sysctl.conf"
+    name: fs.may_detach_mounts
+    value: 1
+    state: present
+    reload: yes
+  when: fs_may_detach_mounts.stat.exists|bool
+
+- name: 查看是否需要设置 net.ipv4.tcp_tw_recycle
+  stat:
+    path: /proc/sys/net/ipv4/tcp_tw_recycle
+  register: tcp_tw_recycle
+  ignore_errors: true
+
+- name: 设置tcp_tw_recycle
+  sysctl:
+    sysctl_file: "/etc/sysctl.d/95-k8s-sysctl.conf"
+    name: net.ipv4.tcp_tw_recycle
+    value: 0
+    state: present
+    reload: yes
+  when: tcp_tw_recycle.stat.exists|bool
+
 - name: 生效系统参数
   shell: "source /etc/profile; sysctl -p /etc/sysctl.d/95-k8s-rke2-sysctl.conf"
   ignore_errors: true
 
 - name: 把SCTP列入内核模块黑名单
-  copy: src=sctp.conf dest=/etc/modprobe.d/sctp.conf
+  copy: 
+    src: sctp.conf 
+    dest: /etc/modprobe.d/sctp.conf
 
 ####################################################################################
 ## 磁盘分区与挂载                                                                ###
@@ -255,6 +289,7 @@
     path: "{{ global.ansible_dir }}/{{ global.pkg_rke2 }}/{{ env_dir | basename }}/{{ rke2_version }}/{{ rke2_arch_suffix }}/rke2.linux-{{ rke2_arch_suffix }}.tar.gz"
   register: rke2_arch_pkg
   delegate_to: localhost
+  become: false
   run_once: true
 
 - name: 缺少对应架构的 RKE2 离线包

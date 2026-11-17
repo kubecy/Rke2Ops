@@ -66,12 +66,11 @@ rke2_server:
   service_node_port_range: "30000-65000"  ## NodePort 可见性的服务预留端口范围
   cluster_domain: "cluster.local"         ## Kubernetes 集群的 DNS 域后缀配置项
 
-  tls_san:
-    - "{{ global.ha_ip }}"     ## HA_VIP, 必须在第一行
-    - "rke2-vip.kubecy.com"    ## 配置域名
-    - 192.168.1.61             ## RKE2 SERVER1
-    - 192.168.1.62             ## RKE2 SERVER2
-    - 192.168.1.63             ## RKE2 SERVER3
+  tls_san: >-
+    {{
+      [global.ha_ip, 'rke2-vip.kubecy.com']
+      + (groups['rke2_server'] | map('extract', hostvars, 'ansible_host') | list)
+    }}
 
   node_taint:                  ## MASTER 注册带有污点 
     - "node-role.kubernetes.io/control-plane=true:NoSchedule"

@@ -6,9 +6,9 @@
     - "{{ env_dir }}/site.yml"
   any_errors_fatal: true
   become: yes
-  become_method: sudo
+  become_method: su
   vars:
-    ansible_become_pass: "{{ servers[inventory_hostname].sudopass | b64decode }}"
+    ansible_become_pass: "{{ servers[inventory_hostname].rootpass | b64decode }}"
   roles:
     - prepare
     - rke2-agent

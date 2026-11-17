@@ -1,6 +1,6 @@
-####################################################################################
-## redhat、centos、openeuler、rocky 系统配置                                     ###
-####################################################################################
+#############################################
+## redhat centos openeuler rocky  系统配置 ##
+#############################################
 
 ---
 - name: 获取 SELinux 运行模式
@@ -29,23 +29,7 @@
     - firewalld
   failed_when: false
 
-- name: 检查 dnf 可执行文件是否存在
-  command: 'command -v dnf'
-  register: dnf_check
-  changed_when: false
-  ignore_errors: true
-
-- name: dnf 删除 centos、redhat 默认安装
-  dnf:
-    name:
-      - firewalld
-      - python-firewall
-      - firewalld-filesystem
-    state: absent
-  ignore_errors: true
-  when: dnf_check.rc == 0
-
-- name: 删除 centos、redhat 默认安装
+- name: 卸载 firewalld 相关包（CentOS Rocky openEuler RHEL）
   package:
     name:
       - firewalld
@@ -53,59 +37,42 @@
       - firewalld-filesystem
     state: absent
   ignore_errors: true
-  when: dnf_check.rc != 0
 
-- name: dnf 安装基础软件包
-  dnf:
-    name:
-      - bash-completion
-      - conntrack-tools
-      - ipset
-      - unzip
-      - lsof
-      - lrzsz
-      - ipvsadm
-      - libseccomp
-      - nfs-utils
-      - psmisc
-      - rsync
-      - socat
-      - ebtables
-      - bridge-utils
-      - rsyslog
-      - net-tools
-      - lsof
-      - sysstat
-      - "{{ 'iproute' if (ansible_distribution == 'CentOS' and ansible_distribution_major_version == '7') else 'iproute-tc' }}"
-    state: present
-  when:
-    - dnf_check.rc == 0
-    - global.install_source | default("online") != "offline"
-
-- name: 安装基础软件包
+- name: 安装 RHEL系（CentOS Rocky openEuler）基础软件包
   package:
     name:
-      - bash-completion
-      - conntrack-tools
-      - ipset
-      - ipvsadm
-      - libseccomp
-      - lvm2
-      - nfs-utils
-      - psmisc
-      - rsync
-      - socat
-      - ebtables
-      - bridge-utils
-      - rsyslog
+      - bash-completion     # bash命令补全工具，需要重新登录服务器生效
+      - conntrack-tools     # network connection cleanup 用到
+      - ipset               # ipvs 模式需要
+      - ipvsadm             # ipvs 模式需要
+      - jq                  # 轻量JSON处理程序
+      - libseccomp          # 安装containerd需要
+      - lvm2                # 安装Local PV LVM 存储插件需要
+      - nfs-utils           # 挂载nfs 共享文件需要 (创建基于 nfs的PV 需要)
+      - psmisc              # 安装psmisc 才能使用命令killall，keepalive的监测脚本需要
+      - rsync               # 文件同步工具，分发证书等配置文件需要
+      - socat               # 用于port forwarding
+      - ebtables            # 二层网桥过滤工具，ipvs+网桥CNI场景使用
+      - bridge-utils        # 网桥管理工具，排查calico/flannel网桥
+      - rsyslog             # 系统日志服务，日志转发采集使用
+      - vim                 # 文本编辑器，运维修改配置文件
+      - telnet              # telnet客户端，TCP端口连通探测，仅用于测试
+      - wget                # 文件下载工具
+      - curl                # HTTP/HTTPS请求调试、接口测试
+      - net-tools           # 传统网络工具，ifconfig/route等
+      - git                 # 代码拉取，helm/配置仓库克隆
+      - tar                 # 压缩解压工具，解压安装包
+      - sysstat             # 系统性能采集，iostat、mpstat、sar
+      - procps-ng           # 进程管理工具，ps、top
+      - htop                # 交互式进程监控，替代top
+      - ncdu                # 交互式磁盘占用分析，快速定位大文件
+      - dstat               # 综合资源监控，CPU/内存/IO/网络一站式查看
+      - tcpdump             # 抓包工具，排查Pod、Service网络问题
+      - iputils             # ping连通性测试工具
+      - traceroute          # 路由追踪，排查跨节点网络路由
+      - bind-utils          # dns解析工具，dig、nslookup，排查CoreDNS
       - "{{ 'iproute' if (ansible_distribution == 'CentOS' and ansible_distribution_major_version == '7') else 'iproute-tc' }}"
     state: present
-  when:
-    - dnf_check.rc != 0
-    - global.install_source | default("online") != "offline"
-
-- import_tasks: offline.yml
-  when: global.install_source | default("online") != "offline"
 
 - name: 禁止 rsyslog 获取 journald 日志1
   lineinfile:

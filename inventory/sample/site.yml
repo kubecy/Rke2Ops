@@ -69,9 +69,9 @@ rke2_server:
   tls_san:
     - "{{ global.ha_ip }}"     ## HA_VIP, 必须在第一行
     - "rke2-vip.kubecy.com"    ## 配置域名
-    - 192.168.1.61             ## RKE2 SERVER1
-    - 192.168.1.62             ## RKE2 SERVER2
-    - 192.168.1.63             ## RKE2 SERVER3
+    {% for item in groups['rke2_server'] %}
+    - "{{ hostvars[item]['ansible_host'] }}"
+    {% endfor %}
 
   node_taint:                  ## MASTER 注册带有污点 
     - "node-role.kubernetes.io/control-plane=true:NoSchedule"
